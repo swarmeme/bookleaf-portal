@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Secrets
+.env
+
+# Local database
+*.db
+*.db-journal
+
+# Frontend (dist/ is committed on purpose so reviewers don't need Node)
+frontend/node_modules/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
