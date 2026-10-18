@@ -17,7 +17,6 @@ A support portal for BookLeaf Publishing with two interfaces:
 4. [AI integration](#4-ai-integration)
 5. [API reference](#5-api-reference)
 6. [Testing](#6-testing)
-7. [Known limitations and next steps](#7-known-limitations-and-next-steps)
 
 ---
 
@@ -344,24 +343,3 @@ The 50 tests run in a few seconds. Each test gets a fresh copy of a migrated, se
 - **Royalty rules:** next payout date across quarter boundaries, and payout status for real sample-data authors (paid up, below threshold, possibly overdue, in production).
 - **Real-time:** the event broker only delivers events a subscriber is allowed to see.
 
----
-
-## 7. Known limitations and next steps
-
-**Limitations in this version**
-
-- **Attachments:** only the file name is stored (the brief makes upload optional). Next step: upload to object storage (S3/GCS) with signed URLs and size/type checks.
-- **Single process:** the SSE broker and background triage run in memory, which fits one server. Behind several workers, use Redis pub/sub (or Postgres `LISTEN/NOTIFY`) for events and a job queue (e.g. Celery/RQ/Arq) for triage. The `publish()`/`subscribe()` interface is designed for that swap.
-- **"Possibly overdue"** is a heuristic: the dataset has no per-quarter royalty breakdown, so some of a pending amount may legitimately be from the current quarter. Hence the "possibly", and the AI is told to treat it as "investigate", not "confirmed late".
-- **Bank details** aren't in the dataset, so drafts ask the author to confirm their bank account is linked instead of claiming it is.
-- **No sign-up or password reset:** accounts come from the seed data.
-- **SQLite** is fine for the demo. Production would use Postgres (only `DATABASE_URL` changes).
-
-**What I'd build next**
-
-1. **Draft quality loop:** record the edit distance between the AI draft and the sent reply. Heavily edited drafts per category show where prompts or knowledge base content need work.
-2. **Retrieval** if the knowledge base grows beyond a few pages: embed the knowledge base sections and retrieve the top-k for each ticket instead of mapping categories to sections.
-3. **SLA timers:** first-response and resolution targets per priority, with breach warnings in the queue and notifications (email/Slack).
-4. **Email notifications** to authors when the team replies, with replies by email threaded back into the ticket.
-5. **Duplicate detection:** link tickets from the same author about the same book, and spot outbreaks (e.g. many "unavailable on Amazon" tickets at once suggest a platform sync problem).
-6. **Audit log** of status, priority and assignment changes; rate limiting on login and ticket creation; refresh-token rotation.
