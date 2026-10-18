@@ -56,7 +56,7 @@ def get_draft(db: Session, ticket: Ticket, llm: LLMClient | None, today: date, r
             model=settings.gemini_draft_model,
             system=DRAFT_SYSTEM,
             prompt=_build_prompt(ticket, today),
-            max_output_tokens=700,
+            max_output_tokens=1000,
             temperature=0.4,  # a little variety in wording, still grounded
         )
     except AIUnavailableError as exc:

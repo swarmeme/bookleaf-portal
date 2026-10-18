@@ -91,6 +91,7 @@ class GeminiClient:
             http_options=types.HttpOptions(timeout=int(settings.ai_timeout_seconds * 1000)),
         )
         self._max_retries = settings.ai_max_retries
+        self._thinking_level = settings.gemini_thinking_level
         self._breaker = _CircuitBreaker(settings.ai_cooldown_seconds)
 
     def generate(
@@ -110,9 +111,7 @@ class GeminiClient:
             temperature=temperature,
             response_mime_type="application/json" if response_schema else None,
             response_schema=response_schema,
-            # Gemini 2.5 models "think" by default, which adds hidden output tokens and
-            # latency. These tasks are well specified, so turn it off.
-            thinking_config=types.ThinkingConfig(thinking_budget=0) if model.startswith("gemini-2.5") else None,
+            thinking_config=self._thinking_config(model),
         )
 
         for attempt in range(self._max_retries + 1):
@@ -147,6 +146,15 @@ class GeminiClient:
             raise failure
 
         raise AssertionError("unreachable")
+
+    def _thinking_config(self, model: str) -> types.ThinkingConfig | None:
+        # Thinking adds latency and its tokens count against max_output_tokens, so a capped
+        # reply can come back cut off. Both tasks are well specified: keep it minimal.
+        if model.startswith("gemini-2.5"):
+            return types.ThinkingConfig(thinking_budget=0)  # 2.5 models take a budget, not a level
+        if self._thinking_level:
+            return types.ThinkingConfig(thinking_level=self._thinking_level)
+        return None
 
 
 def _backoff(attempt: int) -> None:

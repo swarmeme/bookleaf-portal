@@ -25,8 +25,12 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     # Classification is a short structured task, so it runs on the cheapest model;
     # drafting needs better writing, so it gets the stronger one.
-    gemini_classify_model: str = "gemini-2.5-flash-lite"
-    gemini_draft_model: str = "gemini-2.5-flash"
+    gemini_classify_model: str = "gemini-3.5-flash-lite"
+    gemini_draft_model: str = "gemini-3.8-flash"
+    # Gemini 3+ models "think" before answering, which adds latency, and thinking tokens count
+    # against max_output_tokens: at the default level a capped reply can come back cut off.
+    # Both tasks are well specified, so keep thinking low. Empty = the model's default.
+    gemini_thinking_level: str | None = "LOW"
     ai_timeout_seconds: float = 20.0
     ai_max_retries: int = 2  # retries on rate limits / server errors, with backoff
     # After repeated failures, skip AI calls for this long instead of making every
@@ -38,7 +42,7 @@ class Settings(BaseSettings):
 
     frontend_dist_dir: Path = PROJECT_DIR / "frontend" / "dist"
 
-    @field_validator("gemini_api_key", "as_of_date", mode="before")
+    @field_validator("gemini_api_key", "gemini_thinking_level", "as_of_date", mode="before")
     @classmethod
     def empty_string_is_none(cls, value):
         return value or None

@@ -51,7 +51,7 @@ def triage_ticket(ticket: Ticket, llm: LLMClient | None, today: date) -> TriageR
                 description=truncate(ticket.description, _MAX_DESCRIPTION_CHARS),
                 facts=triage_facts(ticket, today),
             ),
-            max_output_tokens=200,
+            max_output_tokens=300,
             temperature=0.0,  # same ticket, same answer
             response_schema=AITriage,
         )

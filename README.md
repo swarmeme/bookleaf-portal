@@ -197,15 +197,16 @@ Product details worth noting:
 
 | Feature | When | Model (default) | Output |
 |---|---|---|---|
-| **Triage** | In the background after each new ticket | `gemini-2.5-flash-lite` | JSON constrained by a schema: category, priority, one-sentence reasoning for the admin |
-| **Reply draft** | When an admin opens a ticket that is waiting on the team (or on request) | `gemini-2.5-flash` | Plain-text reply in BookLeaf's voice, editable before sending |
+| **Triage** | In the background after each new ticket | `gemini-3.5-flash-lite` | JSON constrained by a schema: category, priority, one-sentence reasoning for the admin |
+| **Reply draft** | When an admin opens a ticket that is waiting on the team (or on request) | `gemini-3.8-flash` | Plain-text reply in BookLeaf's voice, editable before sending |
 
 ### Model choice: Gemini
 
 - **Cost and free tier.** Flash-Lite is one of the cheapest capable models available, and Flash is a low-cost model with good writing. Both are on Google AI Studio's free tier, so reviewers can run the full AI path without a paid account.
 - **Native structured output.** `response_schema` constrains triage to valid enum values, so the code never parses free text for a category.
-- **Two tiers for two jobs.** Triage is short pattern-matching, so it uses the cheapest model. Drafting is customer-facing writing, so it uses the stronger one. Both are configurable in `.env`.
-- Gemini 2.5's "thinking" is switched off (`thinking_budget=0`). Both tasks are well specified, and thinking adds hidden output tokens and latency.
+- **Two tiers for two jobs.** Triage is short pattern-matching, so it uses the cheapest model. Drafting is customer-facing writing, so it uses the stronger one.
+- **Thinking is kept low** (`GEMINI_THINKING_LEVEL=LOW`). Gemini 3+ models think before answering by default. Thinking adds latency, and its tokens count against the output limit: in testing, `gemini-3.8-flash` at its default level returned a reply cut off mid-sentence. Both tasks are well specified, so `LOW` loses nothing. (`MINIMAL` isn't supported by `gemini-3.8-flash`.)
+- The older `gemini-2.5-*` models are no longer available to new API keys, so the defaults are the current Flash-Lite and Flash models. Both are configurable in `.env`.
 
 ### Prompt strategy (`ai/prompts.py`)
 
@@ -228,7 +229,7 @@ How this targets "sounds like BookLeaf, not generic AI":
 | Failure | What happens |
 |---|---|
 | No API key | App runs in fallback mode. Triage uses keyword rules (`ai/fallback.py`) with `ai_status = disabled`. The draft panel says AI drafting isn't configured and the admin writes the reply. |
-| Rate limit (429) or server error (5xx) | Retried with exponential backoff and jitter (1s, 2s; configurable), then falls back. |
+| Rate limit (429) or server error (5xx) | Retried with exponential backoff and jitter (1s, 2s; configurable), then falls back. Seen in testing on the free tier: the draft panel showed "AI rate limit reached" and the admin could still reply by hand. |
 | Bad request / invalid key (4xx) | Not retried (retrying can't help); falls back immediately. |
 | Timeout / network error | 20s timeout, retried, then falls back. |
 | Repeated failures | **Circuit breaker:** after 3 consecutive failures, AI calls are skipped for 60s, so an outage doesn't add a 20s+ wait to every ticket. |
@@ -246,7 +247,7 @@ The app doesn't meter tokens; costs are tracked at the AI provider's billing lev
 3. **Drafts are generated only when needed.** A draft is generated automatically only when the author is waiting on the team. Otherwise the admin clicks "Draft with AI".
 4. **History and input are bounded.** Only the last 4 thread messages are sent, each truncated to 800 characters, with a note when earlier messages are omitted. The triage description is capped at 1,500 characters (triage only needs the gist), the draft description at 4,000.
 5. **Facts are compact.** Only the book the ticket is about is included, as a few lines of text, never the author's whole record. Triage gets a single summary line.
-6. **The cheap model triages, temperature is 0, and thinking is off.** Output length is capped (200 tokens for triage, 700 for a draft).
+6. **The cheap model triages, temperature is 0, and thinking is kept low.** Output length is capped.
 7. **Draft usefulness is recorded.** Each sent reply stores `used_ai_draft`, so the team can see how often replies start from an AI draft. The admin thread labels those replies "AI-assisted".
 
 ### API key security

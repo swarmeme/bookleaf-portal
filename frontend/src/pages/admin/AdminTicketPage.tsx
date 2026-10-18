@@ -156,7 +156,7 @@ function Composer({ ticket }: { ticket: AdminTicketDetail }) {
       <ErrorNote error={regenerate.error} />
 
       <textarea
-        rows={12}
+        rows={18}
         value={body}
         maxLength={5000}
         placeholder={drafting ? "" : "Write your reply to the author…"}
