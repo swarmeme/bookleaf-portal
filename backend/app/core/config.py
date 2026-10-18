@@ -16,14 +16,22 @@ class Settings(BaseSettings):
 
     database_url: str = f"sqlite:///{BACKEND_DIR / 'bookleaf.db'}"
 
-    jwt_secret: str = "dev-only-insecure-secret"
+    jwt_secret: str = "dev-only-insecure-secret-change-me-in-env"
     jwt_algorithm: str = "HS256"
     jwt_expiry_minutes: int = 60 * 8  # one working day
     # Set to true when served over HTTPS so the auth cookie is never sent in clear text.
     cookie_secure: bool = False
 
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-2.5-flash"
+    # Classification is a short structured task, so it runs on the cheapest model;
+    # drafting needs better writing, so it gets the stronger one.
+    gemini_classify_model: str = "gemini-2.5-flash-lite"
+    gemini_draft_model: str = "gemini-2.5-flash"
+    ai_timeout_seconds: float = 20.0
+    ai_max_retries: int = 2  # retries on rate limits / server errors, with backoff
+    # After repeated failures, skip AI calls for this long instead of making every
+    # request wait on a dead API (a simple circuit breaker).
+    ai_cooldown_seconds: int = 60
 
     # "Today" for business-date calculations (royalty payout windows etc.).
     as_of_date: date | None = None
