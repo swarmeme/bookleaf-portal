@@ -13,6 +13,7 @@ __pycache__/
 
 # Frontend (dist/ is committed on purpose so reviewers don't need Node)
 frontend/node_modules/
+*.tsbuildinfo
 
 # OS / editor
 .DS_Store
