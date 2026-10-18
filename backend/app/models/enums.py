@@ -45,4 +45,6 @@ class FieldSource(StrEnum):
 class AIStatus(StrEnum):
     PENDING = "pending"
     COMPLETED = "completed"
-    FAILED = "failed"  # AI unavailable; fallback values were used
+    FAILED = "failed"  # AI call failed; fallback values were used
+    DISABLED = "disabled"  # no API key configured; fallback values were used
+

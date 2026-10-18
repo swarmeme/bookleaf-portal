@@ -1,4 +1,5 @@
-"""Load the provided sample dataset plus demo admin accounts.
+"""Apply migrations, then load the provided sample dataset, demo admin accounts and
+a handful of demo tickets.
 
 Runs automatically on startup when the database is empty. To wipe and reseed:
 
@@ -8,16 +9,20 @@ Runs automatically on startup when the database is empty. To wipe and reseed:
 import argparse
 import json
 import logging
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.database import Base, SessionLocal, engine
+from app.core.config import BACKEND_DIR
+from app.core.database import SessionLocal
 from app.core.security import hash_password
-from app.models import Author, Book, User
-from app.models.enums import UserRole
+from app.models import Author, Book, InternalNote, Ticket, TicketMessage, User
+from app.models.enums import TicketStatus, UserRole
+from app.models.types import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -81,20 +86,122 @@ def seed(db: Session) -> None:
             )
         db.add(author)
 
+    db.flush()
+    _seed_demo_tickets(db)
     db.commit()
-    logger.info("Seeded %d authors and %d admins", len(data["authors"]), len(DEMO_ADMINS))
+    logger.info("Seeded %d authors, %d admins and demo tickets", len(data["authors"]), len(DEMO_ADMINS))
+
+
+# Realistic queries so both portals have something to show on first run. They are left
+# untriaged (ai_status=pending) and triaged on startup, through the same AI pipeline as new tickets.
+# (author email, book id or None, subject, description, age, status)
+_DEMO_TICKETS = [
+    (
+        "ananya.reddy@email.com", "BK005", "No royalty received since my book was published",
+        "My book Between Two Temples was published in July 2024 and I have still not received a single royalty "
+        "payment. The dashboard shows sales, so where is my money? It has been well over a year now.",
+        timedelta(days=3), TicketStatus.OPEN,
+    ),
+    (
+        "rohit.kapoor@email.com", "BK003", "Different ISBN on Amazon vs printed copy",
+        "The ISBN shown on the Amazon listing for Code & Karma does not match the ISBN printed on the back cover "
+        "of my author copies. Readers are messaging me asking if they bought the right book.",
+        timedelta(days=2), TicketStatus.IN_PROGRESS,
+    ),
+    (
+        "kavita.deshmukh@email.com", "BK015", "Raising Roots stuck in typesetting?",
+        "It has been 3 weeks and my book Raising Roots still shows as in typesetting. When will it be done? "
+        "I was hoping to launch it before the school holidays.",
+        timedelta(days=1), TicketStatus.OPEN,
+    ),
+    (
+        "priya.sharma@email.com", "BK001", "Royalty amount seems too low",
+        "I have sold 342 copies of Whispers of the Ganges but the royalty I have received so far feels low "
+        "for that many copies. Can you explain how it is calculated?",
+        timedelta(hours=5), TicketStatus.OPEN,
+    ),
+    (
+        "vikram.joshi@email.com", "BK007", "The Last Monsoon showing 'Currently Unavailable' on Amazon",
+        "My poetry collection The Last Monsoon is showing as Currently Unavailable on Amazon India since last "
+        "week. A few readers told me they could not order it.",
+        timedelta(days=6), TicketStatus.RESOLVED,
+    ),
+    (
+        "meera.nair@email.com", None, "Can I update my author bio?",
+        "Hi, I would like to update my author bio on my book pages to mention my new book. "
+        "Can I do that myself or does the team need to do it?",
+        timedelta(minutes=40), TicketStatus.OPEN,
+    ),
+]
+
+
+def _seed_demo_tickets(db: Session) -> None:
+    users = {u.email: u for u in db.scalars(select(User))}
+    admin = users[DEMO_ADMINS[0][1]]
+    now = utcnow()
+    tickets = {}
+    for email, book_id, subject, description, age, status in _DEMO_TICKETS:
+        created = now - age
+        ticket = Ticket(
+            author_id=users[email].author_id,
+            book_id=book_id,
+            subject=subject,
+            description=description,
+            status=status,
+            created_at=created,
+            updated_at=created,
+        )
+        db.add(ticket)
+        tickets[book_id] = ticket
+
+    isbn_ticket = tickets["BK003"]
+    isbn_ticket.assigned_admin_id = admin.id
+    isbn_ticket.internal_notes.append(
+        InternalNote(
+            admin_id=admin.id,
+            body="Checked Amazon: listing shows -03-X instead of -03-5. Raised with production, awaiting fix.",
+            created_at=now - timedelta(days=1, hours=20),
+        )
+    )
+
+    resync_ticket = tickets["BK007"]
+    replied_at = now - timedelta(days=5, hours=22)
+    resync_ticket.assigned_admin_id = admin.id
+    resync_ticket.awaiting_team_reply = False
+    resync_ticket.first_responded_at = replied_at
+    resync_ticket.resolved_at = replied_at
+    resync_ticket.updated_at = replied_at
+    resync_ticket.messages.append(
+        TicketMessage(
+            sender_id=admin.id,
+            created_at=replied_at,
+            body=(
+                "Hi Vikram,\n\nThank you for flagging this, and I'm sorry readers couldn't order The Last Monsoon. "
+                "This is a stock sync issue between our warehouse and Amazon India, not a problem with your listing. "
+                "I've triggered a re-sync with our distribution team; it usually takes 24-48 hours for the book to "
+                "show as available again.\n\nIf it still shows as unavailable after Thursday, just reply here and "
+                "I'll escalate it straight away.\n\nWarm regards,\nBookLeaf Author Support"
+            ),
+        )
+    )
+
+
+def _alembic_config() -> Config:
+    config = Config(BACKEND_DIR / "alembic.ini")
+    config.attributes["configure_logger"] = False  # keep the app's logging setup
+    return config
 
 
 def init_db() -> None:
-    """Create tables and seed them if the database is empty. Safe to call on every startup."""
-    Base.metadata.create_all(engine)
+    """Apply migrations and seed if the database is empty. Safe to call on every startup."""
+    command.upgrade(_alembic_config(), "head")
     with SessionLocal() as db:
         if db.scalar(select(User.id).limit(1)) is None:
             seed(db)
 
 
 def reset_db() -> None:
-    Base.metadata.drop_all(engine)
+    command.downgrade(_alembic_config(), "base")
     init_db()
 
 

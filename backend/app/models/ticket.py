@@ -20,6 +20,9 @@ class Ticket(Base):
 
     status: Mapped[TicketStatus] = mapped_column(enum_column(TicketStatus), default=TicketStatus.OPEN, index=True)
     assigned_admin_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    # True while the ball is in BookLeaf's court: set on creation and on author
+    # follow-ups, cleared when the team replies. Drives the queue's "needs reply" flag.
+    awaiting_team_reply: Mapped[bool] = mapped_column(default=True, index=True)
 
     # Triage. Nullable until classification has run (it runs after the ticket is saved).
     category: Mapped[TicketCategory | None] = mapped_column(enum_column(TicketCategory), index=True)
@@ -48,9 +51,13 @@ class Ticket(Base):
         back_populates="ticket", order_by="InternalNote.created_at", cascade="all, delete-orphan"
     )
 
+    @property
+    def message_count(self) -> int:
+        return len(self.messages)
+
 
 class TicketMessage(Base):
-    """A response from the BookLeaf team, visible to the author."""
+    """A message in the author-visible thread: a team reply or an author follow-up."""
 
     __tablename__ = "ticket_messages"
 
@@ -58,6 +65,9 @@ class TicketMessage(Base):
     ticket_id: Mapped[int] = mapped_column(ForeignKey("tickets.id"), index=True)
     sender_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     body: Mapped[str] = mapped_column(Text)
+    # True when an admin sent a reply that started from the AI draft. Lets the team
+    # measure how often drafts are actually useful.
+    used_ai_draft: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     ticket: Mapped[Ticket] = relationship(back_populates="messages")
@@ -77,3 +87,4 @@ class InternalNote(Base):
 
     ticket: Mapped[Ticket] = relationship(back_populates="internal_notes")
     admin: Mapped["User"] = relationship()
+
