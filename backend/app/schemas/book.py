@@ -2,6 +2,8 @@ from datetime import date
 
 from pydantic import BaseModel, ConfigDict
 
+from app.services.royalty import PayoutStatus
+
 
 class BookOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -23,3 +25,19 @@ class BookOut(BaseModel):
     last_royalty_payout_date: date | None
     print_partner: str | None
     available_on: list[str]
+
+
+class BookRoyaltyOut(BaseModel):
+    book_id: str
+    title: str
+    payout_status: PayoutStatus
+
+
+class RoyaltySummaryOut(BaseModel):
+    total_earned: int
+    total_paid: int
+    total_pending: int
+    payout_threshold: int
+    meets_threshold: bool
+    next_payout_date: date
+    books: list[BookRoyaltyOut]

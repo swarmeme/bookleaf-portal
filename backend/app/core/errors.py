@@ -43,6 +43,13 @@ class ConflictError(AppError):
     code = "conflict"
 
 
+class ValidationFailedError(AppError):
+    """Input that is well-formed but fails a business rule (e.g. a book that isn't yours)."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    code = "validation_error"
+
+
 def _error_response(status_code: int, code: str, message: str, details: object | None = None) -> JSONResponse:
     body = {"error": {"code": code, "message": message}}
     if details is not None:

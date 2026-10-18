@@ -25,7 +25,7 @@ def _extract_token(request: Request) -> str | None:
     return request.cookies.get(AUTH_COOKIE_NAME)
 
 
-def get_current_user(request: Request, db: DbSession) -> User:
+def authenticate(request: Request, db: Session) -> User:
     token = _extract_token(request)
     if not token:
         raise UnauthorizedError("Please log in to continue")
@@ -40,6 +40,10 @@ def get_current_user(request: Request, db: DbSession) -> User:
     return user
 
 
+def get_current_user(request: Request, db: DbSession) -> User:
+    return authenticate(request, db)
+
+
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
@@ -50,3 +54,12 @@ def require_admin(user: CurrentUser) -> User:
 
 
 AdminUser = Annotated[User, Depends(require_admin)]
+
+
+def require_author(user: CurrentUser) -> User:
+    if user.role != UserRole.AUTHOR:
+        raise ForbiddenError("This endpoint is for authors. BookLeaf team members use /api/admin/...")
+    return user
+
+
+AuthorUser = Annotated[User, Depends(require_author)]
